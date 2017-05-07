@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">CapstoneProject</string>
+    <string name="welcome">Welcome to Capstone Project</string>
+    <string name="all_in_one">All-In-One</string>
+    <string name="cabs">cabs</string>
+    <string name="food">food</string>
+    <string name="news">news</string>
+</resources>
