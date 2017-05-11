@@ -10,6 +10,9 @@ android {
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+        buildConfigField  'String', 'CLIENT_ID', ClientId
+        buildConfigField  'String', 'SERVER_TOKEN', ServerToken
+        buildConfigField  'String', 'CLIENT_SECRET', ClientSecret
     }
     buildTypes {
         release {

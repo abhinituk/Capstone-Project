@@ -3,7 +3,10 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="com.allinone.capstoneproject">
 
+    <uses-sdk tools:overrideLibrary="net.openid.appauth" />
+
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:allowBackup="true"
@@ -19,11 +22,26 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".CabActivity"
+        <activity
+            android:name=".CabActivity"
             android:parentActivityName=".MainActivity"
             tools:targetApi="jelly_bean">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="com.allinone.capstoneproject"
+                    android:path="/uberRedirect"
+                    android:scheme="https" />
+            </intent-filter>
+
+            <!-- Redirect Uri will be https://com.allinone.capstoneproject/uberRedirect -->
 
         </activity>
+        <activity android:name=".CabRedirectActivity"></activity>
     </application>
 
 </manifest>
