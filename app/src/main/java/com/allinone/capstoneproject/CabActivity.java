@@ -1,10 +1,21 @@
 package com.allinone.capstoneproject;
 
+import android.Manifest;
 import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.location.Location;
+import android.location.LocationManager;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.os.ResultReceiver;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
@@ -14,7 +25,12 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
+import android.widget.Toast;
 
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.GooglePlayServicesUtil;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.location.LocationServices;
 import com.uber.sdk.android.core.UberSdk;
 import com.uber.sdk.core.auth.Scope;
 import com.uber.sdk.rides.auth.OAuth2Credentials;
@@ -32,27 +48,40 @@ import java.util.regex.Pattern;
 
 import javax.net.ssl.HttpsURLConnection;
 
-public class CabActivity extends AppCompatActivity {
+
+public class CabActivity extends AppCompatActivity implements GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
     private final String TAG = getClass().getSimpleName();
     private final String CLIENT_ID = BuildConfig.CLIENT_ID;
     private final String CLIENT_SECRET = BuildConfig.CLIENT_SECRET;
     private final String SERVER_TOKEN = BuildConfig.SERVER_TOKEN;
+    private final Context mContext = this;
+    android.location.LocationListener locationListener;
+    public static final int SUCCESS_RESULT = 0;
+    public static final int FAILURE_RESULT = 1;
+    public AddressResultReceiver mResultReceiver;
+    private static int REQUEST_CODE_RECOVER_PLAY_SERVICES = 200;
+
+    private GoogleApiClient mGoogleApiClient;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-
-
         super.onCreate(savedInstanceState);
-        final Context mContext = this;
+
         setContentView(R.layout.activity_cab);
 
         //Defining the content authority
-        String CONTENT_AUTHORITY="com.allinone.capstoneproject";
+        String CONTENT_AUTHORITY = "com.allinone.capstoneproject";
 
         //Defining the Base Content Uri
-        final String PATH_UBER="uberRedirect";
-        final Uri BASE_CONTENT_URI= Uri.parse("https://"+CONTENT_AUTHORITY);
-        final Uri REDIRECT_URI=  BASE_CONTENT_URI.buildUpon().appendPath(PATH_UBER).build();
+        final String PATH_UBER = "uberRedirect";
+        final Uri BASE_CONTENT_URI = Uri.parse("https://" + CONTENT_AUTHORITY);
+        final Uri REDIRECT_URI = BASE_CONTENT_URI.buildUpon().appendPath(PATH_UBER).build();
+
+        //Firstly check for google play services & then establish a connection with GoogleApiClient
+        if (checkGooglePlayServices()) {
+            buildGoogleApiClient();
+        }
+
 
         SessionConfiguration config = new SessionConfiguration.Builder()
                 // mandatory
@@ -126,8 +155,8 @@ public class CabActivity extends AppCompatActivity {
                             Pattern p = Pattern.compile(".+code=(.+?(?=&|$))");
                             Matcher m = p.matcher(url);
                             if (m.matches()) {
-                                alertDialog.dismiss();
                                 acquireAccessToken(m.group(1));
+                                alertDialog.dismiss();
                             }
                             return true; // we've handled the url
                         } else {
@@ -158,9 +187,150 @@ public class CabActivity extends AppCompatActivity {
 
             }
         });
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        if (mGoogleApiClient != null) {
+            mGoogleApiClient.connect();
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        //Access the user current location
+        // Acquire a reference to the system Location Manager
+        LocationManager locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
+
+        // Define a listener that responds to location updates
+        locationListener = new android.location.LocationListener() {
+            public void onLocationChanged(Location location) {
+                // Called when a new location is found by the network location provider.
+                Log.d(TAG, "onLocationChanged: " + location);
+                double latitude = location.getLatitude();
+                double longitude = location.getLongitude();
+                Log.d(TAG, latitude+"");
+                Log.d(TAG, longitude+ "");
+                mResultReceiver = new AddressResultReceiver(null);
+                Intent intent = new Intent(mContext, FetchAddressIntentService.class);
+                intent.putExtra(Constants.RECEIVER, mResultReceiver);
+                intent.putExtra(Constants.LOCATION_DATA_EXTRA, location);
+                startService(intent);
+            }
+
+            public void onStatusChanged(String provider, int status, Bundle extras) {
+            }
+
+            public void onProviderEnabled(String provider) {
+            }
+
+            public void onProviderDisabled(String provider) {
+            }
+        };
+
+        // Register the listener with the Location Manager to receive location updates
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            //    ActivityCompat#requestPermissions
+            // here to request the missing permissions, and then overriding
+            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            //                                          int[] grantResults)
+            // to handle the case where the user grants the permission. See the documentation
+            // for ActivityCompat#requestPermissions for more details.
+            return;
+        }
+
+        locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 2000, 100, locationListener);
+        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 2000, 100, locationListener);
+
+    }
 
 
+    private boolean checkGooglePlayServices() {
 
+        int checkGooglePlayServices = GooglePlayServicesUtil
+                .isGooglePlayServicesAvailable(this);
+        if (checkGooglePlayServices != ConnectionResult.SUCCESS) {
+			/*
+			* google play services is missing or update is required
+			*  return code could be
+			* SUCCESS,
+			* SERVICE_MISSING, SERVICE_VERSION_UPDATE_REQUIRED,
+			* SERVICE_DISABLED, SERVICE_INVALID.
+			*/
+            GooglePlayServicesUtil.getErrorDialog(checkGooglePlayServices,
+                    this, REQUEST_CODE_RECOVER_PLAY_SERVICES).show();
+
+            return false;
+        }
+
+        return true;
+
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == REQUEST_CODE_RECOVER_PLAY_SERVICES) {
+
+            if (resultCode == RESULT_OK) {
+                // Make sure the app is not already connected or attempting to connect
+                if (!mGoogleApiClient.isConnecting() &&
+                        !mGoogleApiClient.isConnected()) {
+                    mGoogleApiClient.connect();
+                }
+            } else if (resultCode == RESULT_CANCELED) {
+                Toast.makeText(this, "Google Play Services must be installed.",
+                        Toast.LENGTH_SHORT).show();
+                finish();
+            }
+        }
+    }
+
+    protected synchronized void buildGoogleApiClient() {
+        mGoogleApiClient = new GoogleApiClient.Builder(this)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .addApi(LocationServices.API)
+                .build();
+
+    }
+
+    @Override
+    public void onConnected(@Nullable Bundle bundle) {
+
+    }
+
+    @Override
+    public void onConnectionSuspended(int i) {
+
+    }
+
+    @Override
+    public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
+
+    }
+
+    private class AddressResultReceiver extends ResultReceiver {
+        AddressResultReceiver(Handler handler) {
+            super(handler);
+        }
+
+        @Override
+        protected void onReceiveResult(int resultCode, Bundle resultData) {
+
+            // Display the address string
+            // or an error message sent from the intent service.
+            String mAddressOutput = resultData.getString(Constants.RESULT_DATA_KEY);
+            Log.d(TAG, mAddressOutput);
+//            displayAddressOutput();
+
+            // Show a toast message if an address was found.
+            if (resultCode == Constants.SUCCESS_RESULT) {
+                Toast.makeText(mContext, getString(R.string.address_found), Toast.LENGTH_LONG).show();
+            }
+
+        }
     }
 
     private void acquireAccessToken(String code) {
@@ -195,6 +365,13 @@ public class CabActivity extends AppCompatActivity {
                     String refreshToken = (String) json.get("refresh_token");
                     Log.d(TAG, accessToken);
                     Log.d(TAG, refreshToken);
+
+                    //Storing the access token in shared preferences
+                    SharedPreferences sharedPref = getSharedPreferences("key",Context.MODE_PRIVATE);
+                    SharedPreferences.Editor editor = sharedPref.edit();
+                    editor.putString("uberAccessToken", accessToken);
+                    editor.putString("uberRefreshToken", refreshToken);
+                    editor.apply();
                 } catch(Exception ex) {
                     Log.e("Cab Activity", "Request failed.", ex);
                 }

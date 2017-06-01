@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <uses-feature android:name="android.hardware.location.gps" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -15,6 +17,10 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyAYdqiNS1oRHggpHWn4eRYG2y590A05mqs" />
+
         <activity android:name=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -41,7 +47,11 @@
             <!-- Redirect Uri will be https://com.allinone.capstoneproject/uberRedirect -->
 
         </activity>
-        <activity android:name=".CabRedirectActivity"></activity>
+        <activity android:name=".CabRedirectActivity" />
+
+        <service
+            android:name=".FetchAddressIntentService"
+            android:exported="false"></service>
     </application>
 
 </manifest>
